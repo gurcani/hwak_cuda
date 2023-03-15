@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.insert(1, os.path.realpath('../'))
 import numpy as np
-from hwak_cuda_all import hasegawa_wakatani
+from hwak_cuda import hasegawa_wakatani
 
 hw=hasegawa_wakatani(modified=True,
                      wecontinue=False,
