@@ -11,8 +11,8 @@ import cupy as cp
 from time import time
 import h5py as h5
 import sys,os
-sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/cupy_ivp'))
-#sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/parkode'))
+sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/pcvodeg'))
+sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/parkode'))
 
 default_parameters={
     'C':0.1,
@@ -48,8 +48,7 @@ default_solver_parameters={
     't0':0.0,
     't1':1000.0,
     'dtstep':0.1,
-    'dtshow':1.0,
-    'dtsave':1.0,
+    'dtout':1.0,
     'dtref':1.0,
     'atol' : 1e-12,
     'rtol' : 1e-6,
@@ -169,7 +168,7 @@ def multoutDSI(F):
     F[0,s,1:]=(dxphi[:,0]*F[3,s,1:].T-dyphi[:,1:].T*F[2,s,0]).T/Norm#(dxphi*dyom-dyphi*dxom)/Norm
     F[1,s,1:]=(dxphi[:,0]*F[5,s,1:].T-dyphi[:,1:].T*F[4,s,0]).T/Norm #(dxphi*dyn-dyphi*dxn)/Norm
 
-def multvec34(dydt,y,a,x,b):#,f):
+def multvec34(dydt,y,a,x,b,f):
     Nx=y.shape[1]
     Ny=y.shape[2]
     Nxh=int(Nx/2)
@@ -177,10 +176,10 @@ def multvec34(dydt,y,a,x,b):#,f):
     s1=slice(-Nxh,None,None)
     sy=slice(None,Ny,None)
     for s in [s0,s1]:
-        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]+b[1,s,sy]*x[1,s,sy]#+f[0,s,sy]
-        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[2,s,sy]*x[2,s,sy]+b[3,s,sy]*x[3,s,sy]#+f[1,s,sy]
+        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]+b[1,s,sy]*x[1,s,sy]+f[0,s,sy]
+        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[2,s,sy]*x[2,s,sy]+b[3,s,sy]*x[3,s,sy]+f[1,s,sy]
 
-def multvec62(dydt,y,a,x,b):#,f):
+def multvec62(dydt,y,a,x,b,f):
     Nx=y.shape[1]
     Ny=y.shape[2]
     Nxh=int(Nx/2)
@@ -188,10 +187,10 @@ def multvec62(dydt,y,a,x,b):#,f):
     s1=slice(-Nxh,None,None)
     sy=slice(None,Ny,None)
     for s in [s0,s1]:
-        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]#+f[0,s,sy]
-        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[1,s,sy]*x[1,s,sy]#+f[1,s,sy]
+        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]+f[0,s,sy]
+        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[1,s,sy]*x[1,s,sy]+f[1,s,sy]
 
-def multvecDSI(dydt,y,a,x,b):#,f):
+def multvecDSI(dydt,y,a,x,b,f):
     Nx=y.shape[1]
     Ny=y.shape[2]
     Nxh=int(Nx/2)
@@ -199,8 +198,8 @@ def multvecDSI(dydt,y,a,x,b):#,f):
     s1=slice(-Nxh,None,None)
     sy=slice(None,Ny,None)
     for s in [s0,s1]:
-        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]#+f[0,s,sy]
-        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[1,s,sy]*x[1,s,sy]#+f[1,s,sy]
+        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]+f[0,s,sy]
+        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[1,s,sy]*x[1,s,sy]+f[1,s,sy]
 
 def multvec_lin(dydt,y,a):
     dydt[0,]=a[0,0,]*y[0,]+a[0,1,]*y[1,]
@@ -212,13 +211,9 @@ def init_linmats(pars,kx,ky):
     nukxsqrpow=pars['nukxsqrpow']
     nukysqrpow=pars['nukysqrpow']
     nuZksqrpow=pars['nuZksqrpow']
-    lm=cp.zeros((2,2)+kx.shape,dtype=complex)
-    # if(forcing):
-    #     forcelm=cp.zeros((2,)+kx.shape,dtype=complex)
-    #     forcelm[:]=0
-    # else:
-    #     forcelm
-
+    lm=np.zeros((2,2)+kx.shape,dtype=complex)
+    forcelm=np.zeros((2,)+kx.shape,dtype=complex)
+    forcelm[:]=0
     ksqr=kx**2+ky**2
     lm[0,0,:,:]=-C*oneover(ksqr)-nux*(kx**2)**nukxsqrpow-nuy*(ky**2)**nukysqrpow
     lm[0,1,:,:]=C*oneover(ksqr)
@@ -226,13 +221,13 @@ def init_linmats(pars,kx,ky):
     lm[1,1,:,:]=-C-Dx*(kx**2)**nukxsqrpow-Dy*(ky**2)**nukysqrpow
     lm[:,:,0,0]=0.0
     if(pars['modified']):
-        lm[0,0,:,0]=-nuZF*(kx[:,0]**2)*nuZksqrpow
+        lm[0,0,:,0]=-nuZF*(kx[:,0]**2)**nuZksqrpow
         lm[0,1,:,0]=0.0
         lm[1,0,:,0]=0.0
-        lm[1,1,:,0]=-DZF*(kx[:,0]**2)*nuZksqrpow
+        lm[1,1,:,0]=-DZF*(kx[:,0]**2)**nuZksqrpow
 
     if((pars.get('nl_method')=='34')):
-        nlm=cp.zeros((4,)+kx.shape,dtype=complex)
+        nlm=np.zeros((4,)+kx.shape,dtype=complex)
         nlm[0,:,:]=(kx**2-ky**2)*oneover(ksqr)
         nlm[1,:,:]=(kx*ky)*oneover(ksqr)
         nlm[2,:,:]=1j*kx
@@ -240,14 +235,14 @@ def init_linmats(pars,kx,ky):
     else:
         if not(pars.get('nl_method') in ['62','DSI']):
             print(f"unkonwn nonlinear method: {pars.get('nl_method')}, assuming 62")
-        nlm=cp.zeros((2,)+kx.shape,dtype=float)
+        nlm=np.zeros((2,)+kx.shape,dtype=float)
         nlm[0,:,:]=1*oneover(ksqr)
         nlm[1,:,:]=-1.0
     nlm[:,0,0]=0.0
     nlm[:,:,-1]=0.0
     nlm[:,int(nlm.shape[1]/2),:]=0.0
     hermsymznyq(lm)
-    return lm,nlm #,forcelm
+    return lm,nlm,forcelm
 
 def init_ffts(Npx,Npy,Nfb,Nff):
         datk=cp.zeros((max(Nfb,Nff),Npx,int(Npy/2)+1),dtype=complex)
@@ -278,17 +273,16 @@ def init_kspace_grid(Nx,Ny,Lx,Ly):
     dky=2*np.pi/Ly
     kxl=np.r_[0:int(Nx/2),-int(Nx/2):0]*dkx
     kyl=np.r_[0:int(Ny/2+1)]*dky
-    kx,ky=cp.meshgrid(cp.array(kxl),cp.array(kyl),indexing='ij')
+    kx,ky=np.meshgrid(kxl,kyl,indexing='ij')
     return kx,ky
 
 def init_fields(uk,kx,ky,A=1e-4,sigkx=0.5,sigky=0.5):
     kx0,ky0=0,0
-    th=cp.zeros(kx.shape)
-    th[:,:]=cp.random.rand(kx.shape[0],kx.shape[1])*2*cp.pi;
-    phik0=A*cp.exp(-(kx-kx0)**2/2/sigkx**2-(ky-ky0)**2/2/sigky**2)*cp.exp(1j*th);
-    nk0=A*cp.exp(-(kx-kx0)**2/2/sigkx**2-(ky-ky0)**2/2/sigky**2)*cp.exp(1j*th);
-    uk[0,:,:]=phik0
-    uk[1,:,:]=nk0
+    th=np.zeros(kx.shape)
+    th[:,:]=np.random.rand(kx.shape[0],kx.shape[1])*2*np.pi;
+    phik0=A*np.exp(-(kx-kx0)**2/2/sigkx**2-(ky-ky0)**2/2/sigky**2)*np.exp(1j*th);
+    nk0=A*np.exp(-(kx-kx0)**2/2/sigkx**2-(ky-ky0)**2/2/sigky**2)*np.exp(1j*th);
+    uk[:,:,:]=phik0,nk0
     uk[:,0,0]=0.0
     hermsymznyq(uk)
 
@@ -337,13 +331,18 @@ def save_data(fl,**kwargs):
     for l,m in kwargs.items():
         if(l not in grp.keys()):
             grp[l]=m
+
+def fcallback(t,ct,j,fl,uk,kx,ky):
+    print('t='+str(t)+', '+str(time()-ct)+" secs elapsed. I="+str(np.sum(np.abs(uk)**2)))
+    if (not(fl is None)):
+        save_fields(fl,uk=uk,t=t)
     
 class hasegawa_wakatani:
     def __init__(self,**kwargs):
         controls=default_controls.copy()
         params=default_parameters.copy()
         svpars=default_solver_parameters.copy()
-#        force_handler=None
+        force_handler=None
         for l,m in kwargs.items():
             if(l in default_controls.keys()):
                 controls[l]=m
@@ -351,8 +350,8 @@ class hasegawa_wakatani:
                 params[l]=m
             elif(l in default_solver_parameters.keys()):
                 svpars[l]=m
-            # elif(l in ['force_handler']):
-            #     force_handler=m
+            elif(l in ['force_handler']):
+                force_handler=m
             else:
                 print(l,'is neither a parameter nor a control flag')
         if('onlydiag' in kwargs.keys() and 'saveresult' not in kwargs.keys() and controls['onlydiag']):
@@ -373,9 +372,11 @@ class hasegawa_wakatani:
             # params=load_pars(fl)
             params['nl_method']=nl_method
         else:
-            if(controls['flname']):
+            if(controls['flname'] and controls['saveresult']):
                 fl=h5.File(controls['flname'],'w',libver='latest')
                 fl.swmr_mode = True
+            else:
+                fl=None
         for l,m in params.items():
             if(m in params):
                 params[l]=params[m]
@@ -389,9 +390,8 @@ class hasegawa_wakatani:
             ky=fl['data/ky'][()]
         else:
             kx,ky=init_kspace_grid(Nx,Ny,Lx,Ly)
-        lm,nlm=init_linmats(params,kx,ky)
-#        lm,nlm,forcelm=init_linmats(params,kx,ky)
-        uk=cp.zeros((2,)+kx.shape,dtype=complex)
+        lm,nlm,forcelm=init_linmats(params,kx,ky)
+        uk=np.zeros((2,)+kx.shape,dtype=complex)
         if(controls['onlydiag'] or controls['wecontinue']):
             uk[:]=fl['fields/uk'][-1,]
             t0=fl['fields/t'][-1]
@@ -403,7 +403,7 @@ class hasegawa_wakatani:
             t0=svpars['t0']
         if(controls['saveresult']):
             save_pars(fl,params)
-            save_data(fl,kx=kx.get(),ky=ky.get())
+            save_data(fl,kx=kx,ky=ky)
         threads_per_block=controls['threads_per_block']
         blocks_per_grid=controls['blocks_per_grid']
         if(params.get('nl_method')=='34'):
@@ -432,108 +432,116 @@ class hasegawa_wakatani:
         self.multout=multout
         self.multvec=multvec
         self.params=params
-        self.kx=kx
-        self.ky=ky
-        self.lm=lm
-        self.nlm=nlm
-#        self.forcelm=forcelm
+        self.kx=cp.array(kx)
+        self.ky=cp.array(ky)
+        self.lm=cp.array(lm)
+        self.nlm=cp.array(nlm)
+        self.forcelm=cp.array(forcelm)
         self.uk=uk
-        self.dukdt=cp.zeros_like(uk)
+        self.dukdt=np.zeros_like(uk)
+        self.dukgdt=cp.array(self.dukdt)
         self.svpars=svpars
         self.controls=controls
-        self.fl=fl
+        self.fl=fl        
         self.t0=t0
-#        self.force_handler=force_handler
+        self.force_handler=force_handler
         if not(self.controls['onlydiag']):
             self.r=self.init_solver()
+            self.fcallback=fcallback
 
     def init_solver(self):
-        t1,dtstep,dtshow,dtsave,dtref,atol,rtol,mxsteps=[self.svpars[l] for l in ['t1','dtstep','dtshow','dtsave','dtref','atol','rtol','mxsteps']]
-        t0=self.t0
+        t1,dtstep,dtout,dtref,atol,rtol,mxsteps=[self.svpars[l] for l in ['t1','dtstep','dtout','dtref','atol','rtol','mxsteps']]
+        t0=self.t0        
         rhs=self.rhs
         if(self.svpars['solver']=='pcvodeg'):
             from pcvodeg import pcvodeg
             f = lambda t,y,dydt : rhs (t, y, dydt)
+            print('nthreads:',self.controls['nthreads'])
             r=pcvodeg(f,self.uk,t0,t1,self.controls['nthreads'],atol=atol,rtol=rtol,mxsteps=mxsteps)
             r.integrate=r.integrate_to
             r.gety = lambda ti : r.y
         elif(self.svpars['solver']=='RK45'):
-#            import scipy.integrate as spi
-            import cupy_ivp as cpi
+            import scipy.integrate as spi
             f = lambda t,y : rhs (t, y, self.dukdt)
-            r = cpi.RK45(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
+            r = spi.RK45(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
             def integr(ti):
                 while(r.t<ti):
                     r.step()
             r.integrate=integr
-            r.gety = lambda ti : r.y
+            r.gety = lambda ti : r.dense_output()(ti)
         elif(self.svpars['solver']=='DOP853'):
-#            import scipy.integrate as spi
-            import cupy_ivp as cpi
+            import scipy.integrate as spi
             f = lambda t,y : rhs (t, y, self.dukdt)
-            r = cpi.DOP853(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
+            r = spi.DOP853(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
             def integr(ti):
                 while(r.t<ti and r.status=='running'):
                     r.step()
             r.integrate=integr
-            r.gety = lambda ti : r.y
+            r.gety = lambda ti : r.dense_output()(ti)
         else:
             if not(self.svpars['solver']=='vode'):
                 print(self.svpars['solver']+'is not implemented, using vode instead')
-            import cupy_ivp as cpi
             import scipy.integrate as spi
             f = lambda t,y : rhs (t, y, self.dukdt)
             r=spi.ode(f).set_initial_value(self.uk.ravel().view(dtype=float),t0)
             r.set_integrator('vode',atol=atol,rtol=rtol,max_step=dtstep,nsteps=mxsteps)
             r.gety = lambda ti : r.y
-        r.t0,r.t1,r.dtstep,r.dtshow,r.dtsave,r.dtref=t0,t1,dtstep,dtshow,dtsave,dtref
+        r.t0,r.t1,r.dtstep,r.dtout,r.dtref=t0,t1,dtstep,dtout,dtref
         return r
-
+    
+    def reset(self,uk=None):
+        if (uk is None):
+            init_fields(self.uk, self.kx, self.ky)
+        self.uk[()]=uk
+        self.r=self.init_solver()
+        
     def linfreq(self):
         lam,xi=lincompfreq(self.lm)
         return 1j*lam
 
     def rhs(self,t,y,dukdt):
-        uk=y.view(dtype=complex).reshape(self.uk.shape)
+        uk=cp.array(y.view(dtype=complex).reshape(self.uk.shape))
         datk=self.datk
         datk.fill(0)
         self.multin(uk,datk,self.kx,self.ky)
         dat=self.pfb()
         self.multout(dat)
         datk=self.pff()
-        self.multvec(self.dukdt,uk,self.lm,datk,self.nlm)#,self.forcelm)
-        hermsymznyq(self.dukdt)
+        self.multvec(self.dukgdt,uk,self.lm,datk,self.nlm,self.forcelm)
+        hermsymznyq(self.dukgdt)
+        dukdt[:]=self.dukgdt.get()
         return dukdt.ravel().view(dtype=float)
 
     def run(self):
         r=self.r
-        self.ukcur=self.uk.get()
-        t0,t1,dtstep,dtshow,dtsave,dtref=r.t0,r.t1,r.dtstep,r.dtshow,r.dtsave,r.dtref
+        self.ukcur=self.uk.copy()
+        t0,t1,dtstep,dtout,dtref=r.t0,r.t1,r.dtstep,r.dtout,r.dtref
         t=t0
+        i=0
         j=0
         l=0
-        m=0
+        trnd=int(-np.log10(min(dtstep,dtout,dtref)/100))
         ct=time()
-        tsavenext=t0+(j+1)*dtsave
-        tshownext=t0+(j+1)*dtsave
-        trefnext=t0+(l+1)*dtref
-        if(t<dtstep):
-            save_fields(self.fl,uk=self.ukcur,t=t)
+        if(not self.controls['wecontinue']):
+            self.fcallback(t,ct,j,self.fl,self.ukcur,self.kx,self.ky)
+        tnext=round(t0+(i+1)*dtstep,trnd)
+        toutnext=round(t0+(j+1)*dtout,trnd)
+        trefnext=round(t0+(l+1)*dtref,trnd)
+        
         while(r.t<t1):
-            r.integrate(r.t+dtstep)
+            r.integrate(tnext)
+            i+=1
+            tnext=round(t0+(i+1)*dtstep,trnd)
             if(r.t>=trefnext):
                 l+=1
-                trefnext=t0+(l+1)*dtref
-                # if(self.force_handler is not None):
-                #     self.force_handler(self,r.t)
-            if(r.t>=tshownext):
-                m+=1
-                tshownext=t0+(m+1)*dtshow
-                print('t='+str(r.t)+', '+str(time()-ct)+" secs elapsed. I="+str(np.sum(np.abs(r.gety(t).view(dtype=complex).reshape(self.ukcur.shape))**2)))
-            if(r.t>=tsavenext):
-                t=r.t.get()
-                self.ukcur[:]=r.gety(t).get().view(dtype=complex).reshape(self.ukcur.shape)
-                save_fields(self.fl,uk=self.ukcur,t=t)
+                trefnext=round(t0+(l+1)*dtref,trnd)
+                if(self.force_handler is not None):
+                    self.force_handler(self,r.t)
+            if(r.t>=toutnext):
+                t=toutnext
+                self.ukcur[:]=r.gety(t).view(dtype=complex).reshape(self.ukcur.shape)
+                self.fcallback(t,ct,j,self.fl,self.ukcur,self.kx,self.ky)
                 j+=1
-                tsavenext=t0+(j+1)*dtsave
-        self.fl.close()
+                toutnext=round(t0+(j+1)*dtout,trnd)
+        if self.controls['saveresult']:
+            self.fl.close()
