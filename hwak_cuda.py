@@ -373,9 +373,11 @@ class hasegawa_wakatani:
             # params=load_pars(fl)
             params['nl_method']=nl_method
         else:
-            if(controls['flname']):
+            if(controls['flname'] and controls['saveresult']):
                 fl=h5.File(controls['flname'],'w',libver='latest')
                 fl.swmr_mode = True
+            else:
+                fl=None
         for l,m in params.items():
             if(m in params):
                 params[l]=params[m]
@@ -451,13 +453,7 @@ class hasegawa_wakatani:
         t1,dtstep,dtshow,dtsave,dtref,atol,rtol,mxsteps=[self.svpars[l] for l in ['t1','dtstep','dtshow','dtsave','dtref','atol','rtol','mxsteps']]
         t0=self.t0
         rhs=self.rhs
-        if(self.svpars['solver']=='pcvodeg'):
-            from pcvodeg import pcvodeg
-            f = lambda t,y,dydt : rhs (t, y, dydt)
-            r=pcvodeg(f,self.uk,t0,t1,self.controls['nthreads'],atol=atol,rtol=rtol,mxsteps=mxsteps)
-            r.integrate=r.integrate_to
-            r.gety = lambda ti : r.y
-        elif(self.svpars['solver']=='RK45'):
+        if(self.svpars['solver']=='RK45'):
 #            import scipy.integrate as spi
             import cupy_ivp as cpi
             f = lambda t,y : rhs (t, y, self.dukdt)
@@ -466,7 +462,7 @@ class hasegawa_wakatani:
                 while(r.t<ti):
                     r.step()
             r.integrate=integr
-            r.gety = lambda ti : r.y
+            r.gety = lambda ti : r.dense_output()(ti)
         elif(self.svpars['solver']=='DOP853'):
 #            import scipy.integrate as spi
             import cupy_ivp as cpi
@@ -476,16 +472,7 @@ class hasegawa_wakatani:
                 while(r.t<ti and r.status=='running'):
                     r.step()
             r.integrate=integr
-            r.gety = lambda ti : r.y
-        else:
-            if not(self.svpars['solver']=='vode'):
-                print(self.svpars['solver']+'is not implemented, using vode instead')
-            import cupy_ivp as cpi
-            import scipy.integrate as spi
-            f = lambda t,y : rhs (t, y, self.dukdt)
-            r=spi.ode(f).set_initial_value(self.uk.ravel().view(dtype=float),t0)
-            r.set_integrator('vode',atol=atol,rtol=rtol,max_step=dtstep,nsteps=mxsteps)
-            r.gety = lambda ti : r.y
+            r.gety = lambda ti : r.dense_output()(ti)
         r.t0,r.t1,r.dtstep,r.dtshow,r.dtsave,r.dtref=t0,t1,dtstep,dtshow,dtsave,dtref
         return r
 
@@ -510,30 +497,40 @@ class hasegawa_wakatani:
         self.ukcur=self.uk.get()
         t0,t1,dtstep,dtshow,dtsave,dtref=r.t0,r.t1,r.dtstep,r.dtshow,r.dtsave,r.dtref
         t=t0
+        i=0
         j=0
         l=0
         m=0
         ct=time()
-        tsavenext=t0+(j+1)*dtsave
-        tshownext=t0+(j+1)*dtsave
-        trefnext=t0+(l+1)*dtref
-        if(t<dtstep):
+        trnd=int(-np.log10(min(dtstep,dtsave,dtshow,dtref)/100))
+        tnext=round(t0+(i+1)*dtstep,trnd)
+        tsavenext=round(t0+(j+1)*dtsave,trnd)
+        tshownext=round(t0+(j+1)*dtsave,trnd)
+        trefnext=round(t0+(l+1)*dtref,trnd)
+        
+        if(not self.controls['wecontinue'] and self.controls['saveresult']):
             save_fields(self.fl,uk=self.ukcur,t=t)
         while(r.t<t1):
-            r.integrate(r.t+dtstep)
+            r.integrate(tnext)
+            i+=1
+            tnext=round(t0+(i+1)*dtstep,trnd)
             if(r.t>=trefnext):
                 l+=1
-                trefnext=t0+(l+1)*dtref
+                trefnext=round(t0+(l+1)*dtref,trnd)
                 # if(self.force_handler is not None):
                 #     self.force_handler(self,r.t)
             if(r.t>=tshownext):
                 m+=1
-                tshownext=t0+(m+1)*dtshow
+                tshownext=round(t0+(m+1)*dtshow,trnd)
                 print('t='+str(r.t)+', '+str(time()-ct)+" secs elapsed. I="+str(np.sum(np.abs(r.gety(t).view(dtype=complex).reshape(self.ukcur.shape))**2)))
             if(r.t>=tsavenext):
-                t=r.t.get()
+                t=tsavenext
                 self.ukcur[:]=r.gety(t).get().view(dtype=complex).reshape(self.ukcur.shape)
-                save_fields(self.fl,uk=self.ukcur,t=t)
+                if(self.controls['saveresult']):
+                    save_fields(self.fl,uk=self.ukcur,t=t)
+                if(hasattr(self,'fcallback')):
+                    if(callable(self.fcallback)):
+                        self.fcallback(t,ct,j,self.fl,self.ukcur,self.kx,self.ky)
                 j+=1
-                tsavenext=t0+(j+1)*dtsave
+                tsavenext=round(t0+(j+1)*dtsave,trnd)
         self.fl.close()
