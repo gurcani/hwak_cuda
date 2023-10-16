@@ -1,3 +1,0 @@
-[submodule "cupy_ivp"]
-	path = cupy_ivp
-	url = git@github.com:gurcani/cupy_ivp.git
