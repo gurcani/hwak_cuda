@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Created on Tue Oct 17 11:22:43 2023
+
+@author: ogurcan
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
 Created on Mon Jan 16 11:59:18 2023
 
 @author: ogurcan
 """
 
 import numpy as np
-import cupy as cp
 from time import time
 import h5py as h5
-import sys,os
-sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/pcvodeg'))
-sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/parkode'))
 
 default_parameters={
     'C':0.1,
@@ -119,22 +123,6 @@ def multin62(u,F,kx,ky):
         F[4,s,sy]=1j*kx[s,sy]*u[1,s,sy]
         F[5,s,sy]=1j*ky[s,sy]*u[1,s,sy]
 
-def multinDSI(u,F,kx,ky):
-    Nx=u.shape[1]
-    Ny=u.shape[2]
-    Nxh=int(Nx/2)
-    s0=slice(None,Nxh,None)
-    s1=slice(-Nxh+1,None,None)
-    sy=slice(None,Ny,None)
-    for s in [s0,s1]:
-        ksqr=kx[s,sy]**2+ky[s,sy]**2
-        F[0,s,sy]=1j*kx[s,sy]*u[0,s,sy]
-        F[1,s,sy]=1j*ky[s,sy]*u[0,s,sy]
-        F[2,s,sy]=-1j*ksqr*kx[s,sy]*u[0,s,sy]
-        F[3,s,sy]=-1j*ksqr*ky[s,sy]*u[0,s,sy]
-        F[4,s,sy]=1j*kx[s,sy]*u[1,s,sy]
-        F[5,s,sy]=1j*ky[s,sy]*u[1,s,sy]
-
 def multout34(F):
     Npx=F.shape[1]
     Npy=F.shape[2]-2
@@ -157,17 +145,6 @@ def multout62(F):
     F[1,s,sy]= (F[0,s,sy]*F[5,s,sy]-dyphi*F[4,s,sy])/Norm
     F[0,s,sy]= (F[0,s,sy]*F[3,s,sy]-dyphi*F[2,s,sy])/Norm
 
-def multoutDSI(F):
-    Npx=F.shape[1]
-    Norm=Npx
-    s=slice(None,Npx,None)
-    dxphi=F[0,s,].copy()
-    dyphi=F[1,s,].copy()
-    F[0,s,0]=2*cp.sum((dxphi*F[3,s,].conj()-dyphi*F[2,s,].conj()).real,axis=1)/Norm#(dxphi*dyom-dyphi*dxom)/Norm
-    F[1,s,0]=2*cp.sum((dxphi*F[5,s,].conj()-dyphi*F[4,s,].conj()).real,axis=1)/Norm #(dxphi*dyn-dyphi*dxn)/Norm
-    F[0,s,1:]=(dxphi[:,0]*F[3,s,1:].T-dyphi[:,1:].T*F[2,s,0]).T/Norm#(dxphi*dyom-dyphi*dxom)/Norm
-    F[1,s,1:]=(dxphi[:,0]*F[5,s,1:].T-dyphi[:,1:].T*F[4,s,0]).T/Norm #(dxphi*dyn-dyphi*dxn)/Norm
-
 def multvec34(dydt,y,a,x,b,f):
     Nx=y.shape[1]
     Ny=y.shape[2]
@@ -180,17 +157,6 @@ def multvec34(dydt,y,a,x,b,f):
         dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[2,s,sy]*x[2,s,sy]+b[3,s,sy]*x[3,s,sy]+f[1,s,sy]
 
 def multvec62(dydt,y,a,x,b,f):
-    Nx=y.shape[1]
-    Ny=y.shape[2]
-    Nxh=int(Nx/2)
-    s0=slice(None,Nxh,None)
-    s1=slice(-Nxh,None,None)
-    sy=slice(None,Ny,None)
-    for s in [s0,s1]:
-        dydt[0,s,sy]=a[0,0,s,sy]*y[0,s,sy]+a[0,1,s,sy]*y[1,s,sy]+b[0,s,sy]*x[0,s,sy]+f[0,s,sy]
-        dydt[1,s,sy]=a[1,0,s,sy]*y[0,s,sy]+a[1,1,s,sy]*y[1,s,sy]+b[1,s,sy]*x[1,s,sy]+f[1,s,sy]
-
-def multvecDSI(dydt,y,a,x,b,f):
     Nx=y.shape[1]
     Ny=y.shape[2]
     Nxh=int(Nx/2)
@@ -233,7 +199,7 @@ def init_linmats(pars,kx,ky):
         nlm[2,:,:]=1j*kx
         nlm[3,:,:]=-1j*ky
     else:
-        if not(pars.get('nl_method') in ['62','DSI']):
+        if not(pars.get('nl_method') in ['62']):
             print(f"unkonwn nonlinear method: {pars.get('nl_method')}, assuming 62")
         nlm=np.zeros((2,)+kx.shape,dtype=float)
         nlm[0,:,:]=1*oneover(ksqr)
@@ -245,25 +211,13 @@ def init_linmats(pars,kx,ky):
     return lm,nlm,forcelm
 
 def init_ffts(Npx,Npy,Nfb,Nff):
-        datk=cp.zeros((max(Nfb,Nff),Npx,int(Npy/2)+1),dtype=complex)
+        datk=np.zeros((max(Nfb,Nff),Npx,int(Npy/2)+1),dtype=complex)
         def ftmp():
-            datk.view(dtype=float)[:Nfb,:,:-2] = cp.fft.irfft2(datk[:Nfb,],norm='forward')
+            datk.view(dtype=float)[:Nfb,:,:-2] = np.fft.irfft2(datk[:Nfb,],norm='forward')
             return datk.view(dtype=float)
         pfb=ftmp
         def ftmp():
-            datk[:Nff,]=cp.fft.rfft2(datk.view(dtype=float)[:Nff,:,:-2],norm='backward')
-            return datk
-        pff=ftmp
-        return datk,pfb,pff
-
-def init_fftsDSI(Npx,Npy):
-        datk=cp.zeros((6,Npx,int(Npy/2)+1),dtype=complex)
-        def ftmp():
-            datk[:6,]=cp.fft.ifft(datk[:6,],axis=1,norm='forward')
-            return datk
-        pfb=ftmp
-        def ftmp():
-            datk[:2,]=cp.fft.fft(datk[:2,],axis=1,norm='backward')
+            datk[:Nff,]=np.fft.rfft2(datk.view(dtype=float)[:Nff,:,:-2],norm='backward')
             return datk
         pff=ftmp
         return datk,pfb,pff
@@ -285,12 +239,6 @@ def init_fields(uk,kx,ky,A=1e-4,sigkx=0.5,sigky=0.5):
     uk[:,:,:]=phik0,nk0
     uk[:,0,0]=0.0
     hermsymznyq(uk)
-
-# def load_pars(fl):
-#     pars={}
-#     for l,m in fl['params'].items():
-#         pars[l]=m[()]
-#     return pars
 
 def save_pars(fl,pars):
     if not ('params' in fl):
@@ -411,11 +359,6 @@ class hasegawa_wakatani:
             multout=multout34#[threads_per_block,blocks_per_grid]
             multvec=multvec34
             datk,pfb,pff=init_ffts(Npx,Npy,3,4)
-        elif(params.get('nl_method')=='DSI'):
-            multin=multinDSI
-            multout=multoutDSI
-            multvec=multvecDSI
-            datk,pfb,pff=init_fftsDSI(Npx,Npy)
         else:
             if not( (params.get('nl_method')=='62')):
                 print(f"unkonwn nonlinear method: {params.get('nl_method')}, assuming 62")
@@ -432,14 +375,13 @@ class hasegawa_wakatani:
         self.multout=multout
         self.multvec=multvec
         self.params=params
-        self.kx=cp.array(kx)
-        self.ky=cp.array(ky)
-        self.lm=cp.array(lm)
-        self.nlm=cp.array(nlm)
-        self.forcelm=cp.array(forcelm)
+        self.kx=kx
+        self.ky=ky
+        self.lm=lm
+        self.nlm=nlm
+        self.forcelm=forcelm
         self.uk=uk
         self.dukdt=np.zeros_like(uk)
-        self.dukgdt=cp.array(self.dukdt)
         self.svpars=svpars
         self.controls=controls
         self.fl=fl        
@@ -453,14 +395,7 @@ class hasegawa_wakatani:
         t1,dtstep,dtout,dtref,atol,rtol,mxsteps=[self.svpars[l] for l in ['t1','dtstep','dtout','dtref','atol','rtol','mxsteps']]
         t0=self.t0        
         rhs=self.rhs
-        if(self.svpars['solver']=='pcvodeg'):
-            from pcvodeg import pcvodeg
-            f = lambda t,y,dydt : rhs (t, y, dydt)
-            print('nthreads:',self.controls['nthreads'])
-            r=pcvodeg(f,self.uk,t0,t1,self.controls['nthreads'],atol=atol,rtol=rtol,mxsteps=mxsteps)
-            r.integrate=r.integrate_to
-            r.gety = lambda ti : r.y
-        elif(self.svpars['solver']=='RK45'):
+        if(self.svpars['solver']=='RK45'):
             import scipy.integrate as spi
             f = lambda t,y : rhs (t, y, self.dukdt)
             r = spi.RK45(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
@@ -500,16 +435,16 @@ class hasegawa_wakatani:
         return 1j*lam
 
     def rhs(self,t,y,dukdt):
-        uk=cp.array(y.view(dtype=complex).reshape(self.uk.shape))
+        uk=y.view(dtype=complex).reshape(self.uk.shape)
         datk=self.datk
         datk.fill(0)
         self.multin(uk,datk,self.kx,self.ky)
         dat=self.pfb()
         self.multout(dat)
         datk=self.pff()
-        self.multvec(self.dukgdt,uk,self.lm,datk,self.nlm,self.forcelm)
-        hermsymznyq(self.dukgdt)
-        dukdt[:]=self.dukgdt.get()
+        self.multvec(dukdt,uk,self.lm,datk,self.nlm,self.forcelm)
+        hermsymznyq(dukdt)
+        dukdt[:]=dukdt
         return dukdt.ravel().view(dtype=float)
 
     def run(self):

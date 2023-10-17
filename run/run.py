@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.insert(1, os.path.realpath('../'))
 import numpy as np
-from hwak_cuda import hasegawa_wakatani
+from hwak_numpy import hasegawa_wakatani
 
 hw=hasegawa_wakatani(modified=True,
                      wecontinue=False,
@@ -17,12 +17,12 @@ hw=hasegawa_wakatani(modified=True,
                      flname="out.h5",
                      C=1.0,
                      kap=1.0,
-                     Npx=2048,
-                     Npy=2048,
+                     Npx=1024,
+                     Npy=1024,
                      Lx=16*np.pi,
                      Ly=16*np.pi,
-                     nu=1e-5,
-                     D=1e-5,
+                     nu=1e-4,
+                     D=1e-4,
                      nuZF=0.0,
                      DZF=0.0,
                      t1=500,
