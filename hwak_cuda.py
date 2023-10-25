@@ -527,8 +527,8 @@ class hasegawa_wakatani:
                 #     self.force_handler(self,r.t)
             if(r.t>=tshownext):
                 m+=1
+                print('t='+str(tshownext)+', '+str(time()-ct)+" secs elapsed. I="+str(np.sum(np.abs(r.gety(t).view(dtype=complex).reshape(self.ukcur.shape))**2)))
                 tshownext=round(t0+(m+1)*dtshow,trnd)
-                print('t='+str(r.t)+', '+str(time()-ct)+" secs elapsed. I="+str(np.sum(np.abs(r.gety(t).view(dtype=complex).reshape(self.ukcur.shape))**2)))
             if(r.t>=tsavenext):
                 t=tsavenext
                 self.ukcur[:]=r.gety(t).get().view(dtype=complex).reshape(self.ukcur.shape)
