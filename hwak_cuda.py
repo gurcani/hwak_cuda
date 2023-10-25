@@ -12,7 +12,6 @@ from time import time
 import h5py as h5
 import sys,os
 sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/cupy_ivp'))
-#sys.path.insert(1, os.path.realpath(os.path.dirname(__file__)+'/parkode'))
 
 default_parameters={
     'C':0.1,
@@ -454,7 +453,6 @@ class hasegawa_wakatani:
         t0=self.t0
         rhs=self.rhs
         if(self.svpars['solver']=='RK45'):
-#            import scipy.integrate as spi
             import cupy_ivp as cpi
             f = lambda t,y : rhs (t, y, self.dukdt)
             r = cpi.RK45(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
@@ -463,8 +461,16 @@ class hasegawa_wakatani:
                     r.step()
             r.integrate=integr
             r.gety = lambda ti : r.dense_output()(ti)
+        elif(self.svpars['solver']=='RK23'):
+            import cupy_ivp as cpi
+            f = lambda t,y : rhs (t, y, self.dukdt)
+            r = cpi.RK23(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
+            def integr(ti):
+                while(r.t<ti):
+                    r.step()
+            r.integrate=integr
+            r.gety = lambda ti : r.dense_output()(ti)
         elif(self.svpars['solver']=='DOP853'):
-#            import scipy.integrate as spi
             import cupy_ivp as cpi
             f = lambda t,y : rhs (t, y, self.dukdt)
             r = cpi.DOP853(f,t0,self.uk.ravel().view(dtype=float),t1,max_step=dtstep,atol=atol,rtol=rtol)
