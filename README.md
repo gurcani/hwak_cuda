@@ -40,3 +40,5 @@ you can also find an `anim.py` in the `run` directory. This is given as an examp
 mpirun -np 4 python anim.py
 ```
 Note that if you change the output file name in `run.py`, you need to change it in `anim.py` as well.
+
+A basic run with a 1024x1024 padded resolution up to t=500, should take roughly 2 hours on a normal gpu. Though it depends on the parameters, with large `C` values not saturating at t=500, and small `C` values taking a bit more time to run as they reach steady state more rapidly.
