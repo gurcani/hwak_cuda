@@ -1,7 +1,7 @@
 # hwak_cuda
 a hasegawa wakatani solver using cupy
 
-![hwak](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3d5bjA5eXR2dTRoODZxN2FoajZucGVicGFrazl4bWd1bHl6Y3R5cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/7iNNeQLJJ1PFCZNkm5/source.gif)
+![hwak](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3d5bjA5eXR2dTRoODZxN2FoajZucGVicGFrazl4bWd1bHl6Y3R5cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/7iNNeQLJJ1PFCZNkm5/giphy-downsized-large.gif)
 
 ## Install
 
