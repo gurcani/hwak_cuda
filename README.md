@@ -1,6 +1,8 @@
 # hwak_cuda
 a hasegawa wakatani solver using cupy
 
+![hwak](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3d5bjA5eXR2dTRoODZxN2FoajZucGVicGFrazl4bWd1bHl6Y3R5cCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/7iNNeQLJJ1PFCZNkm5/source.gif)
+
 ## Install
 
 ### using git:
@@ -41,4 +43,4 @@ mpirun -np 4 python anim.py
 ```
 Note that if you change the output file name in `run.py`, you need to change it in `anim.py` as well.
 
-A basic run with a 1024x1024 padded resolution up to t=500, should take roughly 2 hours on a normal gpu. Though it depends on the parameters, with large `C` values not saturating at t=500, and small `C` values taking a bit more time to run as they reach steady state more rapidly.
+A basic run with a 1024x1024 padded resolution up to t=500, should take 1-2 hours on a normal gpu. Though it depends on the parameters, with large `C` values not saturating at t=500, and small `C` values taking a bit more time to run as they reach steady state more rapidly.
